@@ -19,6 +19,7 @@ pub struct App {
     pub status_message: String,
     pub receiver: Option<mpsc::Receiver<CompressMessage>>,
     pub last_compression_result: Option<String>,
+    pub compression_finished_at: Option<std::time::Instant>,
 }
 
 impl Default for App {
@@ -30,6 +31,7 @@ impl Default for App {
             status_message: " Start by pressing 'o' to open a file".to_string(),
             receiver: None,
             last_compression_result: None,
+            compression_finished_at: None,
         }
     }
 }
@@ -61,6 +63,14 @@ impl App {
             };
         }
         self.check_compression_progress();
+
+        // Handle the 2-second auto-exit delay
+        if let Some(finished_at) = self.compression_finished_at {
+            if finished_at.elapsed() >= std::time::Duration::from_secs(2) {
+                self.exit();
+            }
+        }
+
         Ok(())
     }
 
@@ -97,7 +107,7 @@ impl App {
                             output_path, original_size, compressed_size, ratio
                         ));
 
-                        self.exit();
+                        self.compression_finished_at = Some(std::time::Instant::now());
                         return;
                     }
                     CompressMessage::Error(e) => {
@@ -135,6 +145,7 @@ impl App {
                     self.receiver = Some(rx);
                     self.is_compressing = true;
                     self.progress = 0.0;
+                    self.compression_finished_at = None;
 
                     // Let the user know we're starting
                     self.status_message = format!(
