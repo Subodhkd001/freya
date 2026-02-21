@@ -18,6 +18,7 @@ pub struct App {
     pub progress: f64, // A percentage from 0.0 to 1.0
     pub status_message: String,
     pub receiver: Option<mpsc::Receiver<CompressMessage>>,
+    pub last_compression_result: Option<String>,
 }
 
 impl Default for App {
@@ -28,6 +29,7 @@ impl Default for App {
             progress: 0.0,
             status_message: " Start by pressing 'o' to open a file".to_string(),
             receiver: None,
+            last_compression_result: None,
         }
     }
 }
@@ -74,11 +76,28 @@ impl App {
                             self.progress = bytes_processed as f64 / total_bytes as f64;
                         }
                     }
-                    CompressMessage::Finished => {
+                    CompressMessage::Finished {
+                        original_size,
+                        compressed_size,
+                        output_path,
+                    } => {
                         self.is_compressing = false;
                         self.progress = 1.0;
                         self.status_message = " Compression complete!".to_string();
                         self.receiver = None;
+
+                        let ratio = if original_size > 0 {
+                            (compressed_size as f64 / original_size as f64) * 100.0
+                        } else {
+                            0.0
+                        };
+
+                        self.last_compression_result = Some(format!(
+                            "\n✅ Compression successful!\n📂 Saved to: {}\n📊 Original: {} bytes \n📉 Compressed: {} bytes ({:.2}% of original)\n",
+                            output_path, original_size, compressed_size, ratio
+                        ));
+
+                        self.exit();
                         return;
                     }
                     CompressMessage::Error(e) => {
