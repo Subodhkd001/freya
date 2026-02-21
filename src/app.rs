@@ -7,7 +7,7 @@ use ratatui::{
     style::{Style, Stylize},
     symbols::border,
     text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Gauge, Paragraph, Widget},
 };
 use std::{io, sync::mpsc};
 
@@ -94,6 +94,10 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if !self.is_compressing && self.progress > 0.0 {
+            self.progress = 0.0;
+        }
+
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Char('o') => {
@@ -143,12 +147,18 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let chunks = Layout::vertical([
+        let mut constraints = vec![
             Constraint::Length(5), // Height for the description block (borders + text + padding)
             Constraint::Length(3), // Height for the instruction block
-            Constraint::Min(0),    // The remaining empty space on the screen
-        ])
-        .split(area);
+        ];
+
+        let show_progress = self.is_compressing || self.progress > 0.0;
+        if show_progress {
+            constraints.push(Constraint::Length(3)); // Height for the progress block
+        }
+        constraints.push(Constraint::Min(0)); // The remaining empty space on the screen
+
+        let chunks = Layout::vertical(constraints).split(area);
         let title = Line::from(" Freya - Lossless Compression for files ".bold());
         let instructions = Line::from(vec![
             " Open File ".into(),
@@ -182,5 +192,19 @@ impl Widget for &mut App {
             .left_aligned()
             .block(block2)
             .render(chunks[1], buf);
+
+        if show_progress {
+            let percentage = (self.progress * 100.0).clamp(0.0, 100.0) as u16;
+            let gauge = Gauge::default()
+                .block(
+                    Block::bordered()
+                        .title(" Progress ")
+                        .border_style(Style::default().blue()),
+                )
+                .gauge_style(Style::default().fg(ratatui::style::Color::Yellow))
+                .ratio(self.progress.clamp(0.0, 1.0))
+                .label(format!("{}%", percentage));
+            gauge.render(chunks[2], buf);
+        }
     }
 }
